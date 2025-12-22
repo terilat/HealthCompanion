@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import dotenv
 from dataclasses import dataclass
 
+dotenv.load_dotenv()
 
 @dataclass(frozen=True)
 class Settings:
