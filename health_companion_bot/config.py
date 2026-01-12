@@ -1,23 +1,30 @@
 from __future__ import annotations
 
-import os
-import dotenv
-from dataclasses import dataclass
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-dotenv.load_dotenv()
 
-@dataclass(frozen=True)
-class Settings:
-    bot_token: str
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
 
+    bot_token: str = Field(
+        ...,
+        min_length=1,
+        description="Telegram bot token",
+        validation_alias="TELEGRAM_BOT_TOKEN",
+    )
 
 def load_settings() -> Settings:
-    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-    if not bot_token:
+    try:
+        return Settings()
+    except Exception as e:
         raise RuntimeError(
-            "Missing TELEGRAM_BOT_TOKEN env var. Example:\n"
+            "Missing or invalid TELEGRAM_BOT_TOKEN env var. Example:\n"
             '  export TELEGRAM_BOT_TOKEN="123:ABC"\n'
             "Or copy `.env.example` and export it in your shell."
-        )
-    return Settings(bot_token=bot_token)
+        ) from e
 
