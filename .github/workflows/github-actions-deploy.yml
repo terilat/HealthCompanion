@@ -22,7 +22,7 @@ env:
 jobs:
   # DEPLOY — загрузить образ из artifact и запустить контейнер
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, terilat-MS-7E27]
 
     # Безопасность: не деплоим PR из форков.
     # Если PR пришёл из форка, код недоверенный, и запуск на self-hosted машине опасен.
