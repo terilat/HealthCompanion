@@ -1,9 +1,8 @@
 name: push-dev-docker-pipeline
 
 on:
-  pull_request:
+  push:
     branches: ["dev"]
-    types: [opened, synchronize, reopened]
 
 # Чтобы не было гонок, когда в PR прилетает новый коммит:
 concurrency:
