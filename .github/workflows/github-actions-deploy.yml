@@ -33,3 +33,9 @@ jobs:
         run: |
           set -euo pipefail
           docker compose up -d --build --remove-orphans
+
+      - name: Cleanup old containers/images
+        run: |
+          set -euo pipefail
+          docker container prune -f
+          docker image prune -f
