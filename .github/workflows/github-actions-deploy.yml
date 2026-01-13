@@ -14,7 +14,7 @@ permissions:
 jobs:
   deploy:
     # Test workflow
-    runs-on: [self-hosted, terilat-MS-7E27]
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Checkout
