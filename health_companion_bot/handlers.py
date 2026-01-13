@@ -15,6 +15,11 @@ from .llm_processor import extract_health_data, SleepLog
 logger = logging.getLogger(__name__)
 
 MAIN_MENU = 1
+ASK_DATE = 2
+ASK_START = 3
+
+DATE_INPUT_FORMAT = "%Y.%m.%d"
+TIME_INPUT_FORMAT = "%H:%M"
 
 
 def _project_root() -> Path:
@@ -38,7 +43,7 @@ async def post_start_hook_stub(
     logger.info("post_start_hook_stub user_id=%s user_dir=%s", update.effective_user.id, user_dir)
 
 
-async def process_image_stub(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def process_image_stub(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
     Обрабатывает изображение от пользователя:
     1. Сохраняет фото в директорию пользователя
@@ -68,7 +73,7 @@ async def process_image_stub(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     if not photo_file:
         await message.reply_text("Не удалось получить изображение. Попробуйте отправить фото еще раз.")
-        return
+        return MAIN_MENU
     
     try:
         # Показываем пользователю, что обрабатываем
@@ -93,12 +98,12 @@ async def process_image_stub(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         # Вызываем LLM для извлечения данных
         sleep_log = await extract_health_data(prompt, SleepLog, image_path=image_path)
+        sleep_log = sleep_log.model_copy(update={"date": None, "start": None, "end": None})
+        context.user_data["sleep_log"] = sleep_log.model_dump()
         
         # Формируем ответ пользователю
         response = (
             "✅ Данные о сне извлечены из изображения:\n\n"
-            f"📅 Дата: {sleep_log.date}\n"
-            f"⏰ Время сна: {sleep_log.start} - {sleep_log.end}\n"
             f"⏱ Продолжительность: {sleep_log.duration}\n"
             f"⭐ Оценка качества: {sleep_log.score}/100\n"
             f"😴 Глубокий сон: {sleep_log.deep_stage}%\n"
@@ -114,6 +119,8 @@ async def process_image_stub(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         await message.reply_text(response)
         logger.info("Данные успешно извлечены и отправлены: user_id=%s", user_id)
+        await message.reply_text("Введите дату записи в формате YYYY.MM.DD:")
+        return ASK_DATE
         
     except Exception as e:
         logger.error("Ошибка при обработке изображения: user_id=%s, error=%s", user_id, e, exc_info=True)
@@ -121,6 +128,73 @@ async def process_image_stub(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "Извините, произошла ошибка при обработке изображения. "
             "Попробуйте отправить фото еще раз или опишите данные текстом."
         )
+        return MAIN_MENU
+
+
+def _parse_date_input(text: str) -> str | None:
+    try:
+        parsed = datetime.strptime(text, DATE_INPUT_FORMAT)
+    except ValueError:
+        return None
+    return parsed.strftime(DATE_INPUT_FORMAT)
+
+
+def _parse_time_input(text: str) -> str | None:
+    try:
+        parsed = datetime.strptime(text, TIME_INPUT_FORMAT)
+    except ValueError:
+        return None
+    return parsed.strftime(TIME_INPUT_FORMAT)
+
+
+async def _ask_sleep_start(message) -> None:
+    await message.reply_text("Введите время начала сна в формате HH:MM:")
+
+
+async def on_sleep_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = (update.effective_message.text or "").strip()
+    parsed = _parse_date_input(text)
+    if not parsed:
+        await update.effective_message.reply_text("Неверный формат даты. Используйте YYYY.MM.DD.")
+        return ASK_DATE
+    context.user_data["sleep_date"] = parsed
+    await _ask_sleep_start(update.effective_message)
+    return ASK_START
+
+
+async def on_sleep_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = (update.effective_message.text or "").strip()
+    parsed = _parse_time_input(text)
+    if not parsed:
+        await update.effective_message.reply_text("Неверный формат времени. Используйте HH:MM.")
+        return ASK_START
+    context.user_data["sleep_start"] = parsed
+    duration = (context.user_data.get("sleep_log") or {}).get("duration")
+    sleep_date_text = context.user_data.get("sleep_date")
+    sleep_window = None
+    if duration and sleep_date_text:
+        try:
+            sleep_date = datetime.strptime(sleep_date_text, DATE_INPUT_FORMAT).date()
+            start_time = datetime.strptime(parsed, TIME_INPUT_FORMAT).time()
+            start_dt = datetime.combine(sleep_date, start_time)
+            end_dt = start_dt + duration
+            sleep_window = f"{parsed} - {end_dt.strftime(TIME_INPUT_FORMAT)}"
+        except ValueError:
+            sleep_window = None
+
+    if sleep_window:
+        await update.effective_message.reply_text(
+            "Спасибо! Записал данные:\n"
+            f"📅 Дата: {sleep_date_text}\n"
+            f"⏰ Окно сна: {sleep_window}"
+        )
+    else:
+        await update.effective_message.reply_text(
+            "Спасибо! Записал данные:\n"
+            f"📅 Дата: {sleep_date_text}\n"
+            f"⏰ Время начала сна: {parsed}"
+        )
+    return MAIN_MENU
 
 
 async def process_text_stub(
@@ -199,8 +273,7 @@ def _document_looks_like_image(mime_type: str | None, file_name: str | None) -> 
 
 
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await process_image_stub(update, context)
-    return MAIN_MENU
+    return await process_image_stub(update, context)
 
 
 async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -213,8 +286,7 @@ async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         await message.reply_text("Пожалуйста, отправь файл-изображение (png/jpg/webp/...).")
         return MAIN_MENU
 
-    await process_image_stub(update, context)
-    return MAIN_MENU
+    return await process_image_stub(update, context)
 
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

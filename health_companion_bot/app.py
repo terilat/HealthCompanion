@@ -13,12 +13,16 @@ from telegram.ext import (
 
 from .config import load_settings
 from .handlers import (
+    ASK_DATE,
+    ASK_START,
     MAIN_MENU,
     cancel,
     on_document,
     on_menu_click,
     on_orphan_callback,
     on_photo,
+    on_sleep_date,
+    on_sleep_start,
     on_text,
     on_unknown,
     prompt_start,
@@ -41,6 +45,8 @@ def build_application() -> Application:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, on_text),
                 MessageHandler(filters.ALL & ~filters.COMMAND, on_unknown),
             ],
+            ASK_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, on_sleep_date)],
+            ASK_START: [MessageHandler(filters.TEXT & ~filters.COMMAND, on_sleep_start)],
         },
         fallbacks=[
             CommandHandler("start", start),
