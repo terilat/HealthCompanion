@@ -6,7 +6,7 @@ on:
 
 # Чтобы не было гонок, когда в PR прилетает новый коммит:
 concurrency:
-  group: pr-dev-${{ github.event.pull_request.number }}
+  group: push-dev-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
