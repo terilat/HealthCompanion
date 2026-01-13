@@ -65,12 +65,12 @@ jobs:
       # -o ... — путь до выходного файла.
       # Это нужно, чтобы "передать" образ между job'ами через artifacts,
       # особенно если у вас несколько self-hosted runners (и job'ы могут попасть на разные машины).
-      - name: Save image to artifact (docker save)
-        run: |
-          set -euo pipefail
-          TAG="${{ github.sha }}"
-          mkdir -p /tmp/docker-image
-          docker save "${IMAGE_NAME}:${TAG}" -o /tmp/docker-image/image.tar
+      # - name: Save image to artifact (docker save)
+      #   run: |
+      #     set -euo pipefail
+      #     TAG="${{ github.sha }}"
+      #     mkdir -p /tmp/docker-image
+      #     docker save "${IMAGE_NAME}:${TAG}" -o /tmp/docker-image/image.tar
 
       # --- Шаг 4: загрузить tar как artifact GitHub Actions ---
 
@@ -80,12 +80,12 @@ jobs:
       # Какой файл выгружать в artifacts.
 
       # Сколько дней хранить артефакт (минимально, чтобы не захламлять).
-      - name: Upload image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image-${{ github.sha }}
-          path: /tmp/docker-image/image.tar
-          retention-days: 1
+      # - name: Upload image artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: docker-image-${{ github.sha }}
+      #     path: /tmp/docker-image/image.tar
+      #     retention-days: 1
 
   test:
     # этот job начнётся только после успешного build

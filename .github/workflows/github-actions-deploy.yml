@@ -18,17 +18,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          clean: false
 
-      - name: Write .env from secrets (if provided)
-        if: ${{ env.TELEGRAM_BOT_TOKEN != '' }}
+      - name: Ensure local .env exists
         run: |
           set -euo pipefail
-          printf 'TELEGRAM_BOT_TOKEN=%s\n' "${TELEGRAM_BOT_TOKEN}" > .env
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          if [ ! -f .env ]; then
+            echo "Missing .env in workspace. Create it on the runner before deploy."
+            exit 1
+          fi
 
       - name: Build and run via Compose
         run: |
           set -euo pipefail
-          docker compose build
-          docker compose up -d --remove-orphans
+          docker compose up -d --build --remove-orphans
