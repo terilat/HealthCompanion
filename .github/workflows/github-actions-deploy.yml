@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   deploy:
+    # Test workflow
     runs-on: [self-hosted, terilat-MS-7E27]
 
     steps:
