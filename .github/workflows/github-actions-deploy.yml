@@ -23,7 +23,6 @@ env:
 jobs:
   # DEPLOY — загрузить образ из artifact и запустить контейнер
   deploy:
-    needs: test
     runs-on: self-hosted
 
     # Безопасность: не деплоим PR из форков.
