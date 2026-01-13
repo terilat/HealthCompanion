@@ -22,13 +22,16 @@ jobs:
         with:
           clean: false
 
-      - name: Ensure local .env exists
+      - name: Write .env from secrets
         run: |
           set -euo pipefail
-          if [ ! -f .env ]; then
-            echo "Missing .env in workspace. Create it on the runner before deploy."
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ]; then
+            echo "Missing TELEGRAM_BOT_TOKEN secret. Add it in GitHub: Settings -> Secrets and variables -> Actions."
             exit 1
           fi
+          printf 'TELEGRAM_BOT_TOKEN=%s\n' "${TELEGRAM_BOT_TOKEN}" > .env
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
       - name: Build and run via Compose
         run: |
