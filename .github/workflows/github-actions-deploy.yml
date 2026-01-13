@@ -1,4 +1,4 @@
-name: pr-dev-docker-pipeline
+name: push-dev-docker-pipeline
 
 on:
   pull_request:
