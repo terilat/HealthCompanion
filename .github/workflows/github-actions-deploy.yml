@@ -1,0 +1,114 @@
+name: pr-dev-docker-pipeline
+
+on:
+  pull_request:
+    branches: ["dev"]
+    types: [opened, synchronize, reopened]
+
+# Чтобы не было гонок, когда в PR прилетает новый коммит:
+concurrency:
+  group: pr-dev-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: myapp
+  CONTAINER_BASE_NAME: myapp-pr
+  # Настройте под ваш сервис:
+  HOST_PORT: "18080"
+  CONTAINER_PORT: "8000"
+
+jobs:
+  # DEPLOY — загрузить образ из artifact и запустить контейнер
+  deploy:
+    needs: test
+    runs-on: self-hosted
+
+    # Безопасность: не деплоим PR из форков.
+    # Если PR пришёл из форка, код недоверенный, и запуск на self-hosted машине опасен.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      # --- Шаг 1: скачать artifact с образом ---
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ github.sha }}
+          # Скачиваем именно артефакт, соответствующий текущему SHA.
+
+          path: /tmp/docker-image
+          # Куда скачать файл image.tar на раннере.
+
+      # --- Шаг 2: docker load (импортировать tar обратно в Docker) ---
+
+      # docker load — импортирует образ из tar в локальный Docker daemon.
+      # -i — input file (файл для чтения).
+      # После этого образ myapp:<sha> снова существует локально на машине деплоя.
+      - name: Load image (docker load)
+        run: |
+          set -euo pipefail
+          docker load -i /tmp/docker-image/image.tar
+
+      # --- Шаг 3: остановить/удалить старый контейнер и запустить новый ---
+      
+      # Номер PR — нужен для уникального имени контейнера.
+
+      # Тег образа — текущий коммит.
+
+      # Имя контейнера вида: myapp-pr-123
+
+      # docker ps -a              — показать все контейнеры (и запущенные, и остановленные)
+      # --format '{{.Names}}'     — вывести только имена контейнеров, по одному в строке
+      # grep -q                   — "тихий" режим, только код возврата (без вывода)
+      # -x                        — совпадение всей строки целиком
+      # Если контейнер с таким именем существует — идём внутрь if.
+
+      # docker rm -f — удалить контейнер принудительно:
+      # -f остановит, если он запущен, и удалит.
+
+      # docker run -d — запустить контейнер в фоне (detached)
+      # --name ...     — задать имя контейнера (чтобы потом легко управлять)
+      # -p host:container — проброс порта:
+      #   на машине раннера откроется HOST_PORT, внутри контейнера будет CONTAINER_PORT.
+      # --restart unless-stopped — политика рестарта:
+      #   контейнер перезапустится после перезагрузки хоста/демона Docker,
+      #   пока вы явно не остановите его.
+      # 마지막 аргумент "${IMAGE_NAME}:${TAG}" — какой образ запускать.
+
+      # Просто информационные сообщения в лог.
+      - name: Run/Restart container (runtime)
+        run: |
+          set -euo pipefail
+
+          PR_NUM="${{ github.event.pull_request.number }}"
+
+          TAG="${{ github.sha }}"
+
+          CONTAINER_NAME="${CONTAINER_BASE_NAME}-${PR_NUM}"
+
+          if docker ps -a --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
+
+            echo "Stopping existing container: ${CONTAINER_NAME}"
+            docker rm -f "${CONTAINER_NAME}"
+          fi
+
+          echo "Starting container: ${CONTAINER_NAME}"
+          docker run -d \
+            --name "${CONTAINER_NAME}" \
+            -p "${HOST_PORT}:${CONTAINER_PORT}" \
+            --restart unless-stopped \
+            "${IMAGE_NAME}:${TAG}"
+
+          echo "Deployed PR #${PR_NUM} to runtime on self-hosted runner."
+          echo "URL (пример): http://<runner-host>:${HOST_PORT}/"
+
+      # --- Опционально: smoke-check (пример) ---
+      # - name: Smoke check
+      #   run: |
+      #     set -euo pipefail
+      #     curl -fsS "http://127.0.0.1:${HOST_PORT}/health" >/dev/null
+      # curl -f    — считать 4xx/5xx ошибкой
+      # -sS        — тихо, но показать ошибку при падении
+      # Это минимальная проверка, что сервис реально поднялся.

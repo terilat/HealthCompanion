@@ -1,0 +1,99 @@
+# Имя workflow (показывается в UI GitHub Actions)
+name: pr-dev-docker-pipeline
+
+on:
+  pull_request:
+    branches: ["dev"]
+    types: [opened, synchronize, reopened]
+    # opened      — PR создан
+    # synchronize — в PR добавили новые коммиты (push в ветку PR)
+    # reopened    — PR переоткрыли
+
+# Защита от гонок: если в PR прилетел новый коммит,
+# старый прогон пайплайна отменяется, чтобы не деплоить устаревшее.
+concurrency:
+  group: pr-dev-${{ github.event.pull_request.number }}    # группируем по номеру PR (одна "очередь" на PR)
+  cancel-in-progress: true    # новый запуск отменяет предыдущий в этой группе
+
+# Права GITHUB_TOKEN в этом workflow.
+# Здесь достаточно читать содержимое репозитория.
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: health-companion
+
+jobs:
+  build:
+    # runs-on: self-hosted
+    runs-on: ubuntu-latest
+    steps:
+      # --- Шаг 1: Checkout репозитория на диск раннера ---
+      - name: Checkout
+        uses: actions/checkout@v4
+        # actions/checkout делает git clone/checkout кода на runner,
+        # чтобы дальше docker build видел Dockerfile и исходники.
+
+      # --- Шаг 2: Docker build ---
+      - name: Build Docker image
+        # set -e    : завершить скрипт при любой ошибке команды (ненулевой код возврата)
+        # set -u    : ошибка, если используем неинициализированную переменную
+        # set -o pipefail : если в пайпе (cmd1 | cmd2) упала cmd1, скрипт тоже считается упавшим
+        # Это делает пайплайн более "строгим" и предсказуемым.
+
+        # TAG — переменная shell. Мы присваиваем ей SHA коммита.
+        # ${{ github.sha }} — это GitHub expression (подставляется GitHub ДО выполнения на раннере),
+        # обычно полный хеш текущего коммита.
+        # Идея: тег образа = конкретная версия кода (коммит).
+
+        # docker build — сборка образа из Dockerfile в текущей папке (.)
+        # -t "name:tag" — задать имя и тег образа (например myapp:abcdef...)
+        # В итоге на раннере появляется локальный образ myapp:<sha>.
+        run: |
+          set -euo pipefail
+          TAG="${{ github.sha }}"
+          docker build -t "${IMAGE_NAME}:${TAG}" .
+
+      # --- Шаг 3: docker save (упаковка образа в tar, чтобы передать дальше) ---
+
+      # Снова берём тег по SHA — важно, чтобы совпадал с build.
+
+      # Создаём директорию для временного файла.
+      # -p означает "создай и родительские, и не ругайся если уже есть".
+
+      # docker save — экспортирует Docker-образ в tar-файл.
+      # -o ... — путь до выходного файла.
+      # Это нужно, чтобы "передать" образ между job'ами через artifacts,
+      # особенно если у вас несколько self-hosted runners (и job'ы могут попасть на разные машины).
+      - name: Save image to artifact (docker save)
+        run: |
+          set -euo pipefail
+          TAG="${{ github.sha }}"
+          mkdir -p /tmp/docker-image
+          docker save "${IMAGE_NAME}:${TAG}" -o /tmp/docker-image/image.tar
+
+      # --- Шаг 4: загрузить tar как artifact GitHub Actions ---
+
+      # Имя артефакта в GitHub: "docker-image-<sha>".
+      # Удобно, чтобы не путать версии при параллельных запусках.
+
+      # Какой файл выгружать в artifacts.
+
+      # Сколько дней хранить артефакт (минимально, чтобы не захламлять).
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ github.sha }}
+          path: /tmp/docker-image/image.tar
+          retention-days: 1
+
+  test:
+    # этот job начнётся только после успешного build
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder tests
+        run: |
+          echo "TEST STAGE PLACEHOLDER"
+          echo "Later: run unit/integration tests here."
+
