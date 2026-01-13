@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+import re
+from datetime import datetime, timedelta as TimeDelta
 from pathlib import Path
 
 from telegram import Update
@@ -17,8 +18,6 @@ logger = logging.getLogger(__name__)
 MAIN_MENU = 1
 ASK_DATE = 2
 ASK_START = 3
-ASK_END = 4
-
 DATE_INPUT_FORMAT = "%Y.%m.%d"
 TIME_INPUT_FORMAT = "%H:%M"
 
@@ -152,8 +151,37 @@ async def _ask_sleep_start(message) -> None:
     await message.reply_text("Введите время начала сна в формате HH:MM:")
 
 
-async def _ask_sleep_end(message) -> None:
-    await message.reply_text("Введите время окончания сна в формате HH:MM:")
+def _normalize_duration(value: object) -> TimeDelta | None:
+    if isinstance(value, TimeDelta):
+        return value
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    time_match = re.match(r"^(?P<hours>\d+):(?P<minutes>\d+)(?::(?P<seconds>\d+))?$", cleaned)
+    if not time_match:
+        return None
+    hours = int(time_match.group("hours"))
+    minutes = int(time_match.group("minutes"))
+    seconds = int(time_match.group("seconds") or 0)
+    return TimeDelta(hours=hours, minutes=minutes, seconds=seconds)
+
+
+def _calculate_sleep_end(
+    start_time: str, duration: TimeDelta, sleep_date: str | None
+) -> str:
+    base_date = (
+        datetime.strptime(sleep_date, DATE_INPUT_FORMAT).date()
+        if sleep_date
+        else datetime.now().date()
+    )
+    start_dt = datetime.combine(
+        base_date,
+        datetime.strptime(start_time, TIME_INPUT_FORMAT).time(),
+    )
+    end_dt = start_dt + duration
+    return end_dt.strftime(TIME_INPUT_FORMAT)
 
 
 async def on_sleep_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -174,22 +202,24 @@ async def on_sleep_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.effective_message.reply_text("Неверный формат времени. Используйте HH:MM.")
         return ASK_START
     context.user_data["sleep_start"] = parsed
-    await _ask_sleep_end(update.effective_message)
-    return ASK_END
-
-
-async def on_sleep_end(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = (update.effective_message.text or "").strip()
-    parsed = _parse_time_input(text)
-    if not parsed:
-        await update.effective_message.reply_text("Неверный формат времени. Используйте HH:MM.")
-        return ASK_END
-    context.user_data["sleep_end"] = parsed
+    sleep_log = context.user_data.get("sleep_log", {})
+    duration = _normalize_duration(sleep_log.get("duration"))
+    if not duration:
+        await update.effective_message.reply_text(
+            "Не удалось определить продолжительность сна из скриншота. "
+            "Пожалуйста, отправьте изображение снова."
+        )
+        return MAIN_MENU
+    sleep_end = _calculate_sleep_end(
+        context.user_data.get("sleep_start"),
+        duration,
+        context.user_data.get("sleep_date"),
+    )
+    context.user_data["sleep_end"] = sleep_end
     await update.effective_message.reply_text(
         "Спасибо! Записал данные:\n"
         f"📅 Дата: {context.user_data.get('sleep_date')}\n"
-        f"⏰ Время сна: {context.user_data.get('sleep_start')} - "
-        f"{context.user_data.get('sleep_end')}"
+        f"⏰ Время сна: {context.user_data.get('sleep_start')} - {sleep_end}"
     )
     return MAIN_MENU
 
