@@ -1,6 +1,12 @@
 __pycache__/
 */__pycache__/
 
+# Github actions
+_actions/
+_PipelineMapping/
+_temp/
+_tool/
+
 # Data
 data/
 
