@@ -96,16 +96,19 @@ class SleepLog(BaseModel):
         cleaned = value.strip().lower()
         if not cleaned:
             return None
+        if not re.search(r"\d", cleaned):
+            return None
         if ":" in cleaned:
             parts = cleaned.split(":")
-            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
                 return TimeDelta(hours=int(parts[0]), minutes=int(parts[1]))
-        match = re.search(r"(\d+)\s*ч(?:\s*(\d+)\s*мин)?", cleaned)
-        if match:
-            hours = int(match.group(1))
-            minutes = int(match.group(2) or 0)
+        hours_match = re.search(r"(\d+)\s*(?:ч|час(?:а|ов)?)", cleaned)
+        minutes_match = re.search(r"(\d+)\s*(?:мин|минута|минуты|минут)", cleaned)
+        if hours_match or minutes_match:
+            hours = int(hours_match.group(1)) if hours_match else 0
+            minutes = int(minutes_match.group(1)) if minutes_match else 0
             return TimeDelta(hours=hours, minutes=minutes)
-        return value
+        return None
 
 # Создаем клиент OpenAI, настроенный на Ollama API
 openai_client = AsyncOpenAI(
