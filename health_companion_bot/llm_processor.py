@@ -33,7 +33,7 @@ OCR_PROMPT = (
     "Считай весь текст со скриншота максимально точно. "
     "Верни только распознанный текст, построчно, без комментариев."
 )
-
+OLLAMA_MODEL = "qwen3-vl:4b"
 MIN_NON_NULL_FIELDS = 5
 
 
@@ -142,7 +142,7 @@ async def _extract_with_ollama(
     image_path: Path,
 ) -> BaseModel:
     payload = {
-        "model": "qwen3-vl:8b",
+        "model": OLLAMA_MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             _build_user_message(user_text, image_path),
@@ -171,7 +171,7 @@ async def _extract_with_ollama(
 
 async def _extract_text_with_ollama(image_path: Path) -> str:
     payload = {
-        "model": "qwen3-vl:8b",
+        "model": OLLAMA_MODEL,
         "messages": [
             {"role": "system", "content": OCR_PROMPT},
             _build_user_message("Считай текст с изображения.", image_path),
@@ -277,7 +277,7 @@ async def extract_health_data(
                 return response_model.model_validate(merged)
         return result
     result = await client.chat.completions.create(
-        model="qwen3-vl:8b",
+        model=OLLAMA_MODEL,
         messages=[
             {
                 "role": "system", 
