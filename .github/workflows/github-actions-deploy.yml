@@ -21,7 +21,7 @@ jobs:
         with:
           clean: false
 
-      - name: Write .env from secrets
+      - name: Write .env from secrets and variables
         run: |
           set -euo pipefail
           if [ -z "${TELEGRAM_BOT_TOKEN}" ]; then
