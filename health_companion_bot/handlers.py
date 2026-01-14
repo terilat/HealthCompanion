@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 MAIN_MENU = 1
 ASK_DATE = 2
-ASK_START = 3
+ASK_IMAGE = 3
+ASK_START = 4
 DATE_INPUT_FORMAT = "%Y.%m.%d"
 TIME_INPUT_FORMAT = "%H:%M"
 
@@ -41,7 +42,11 @@ async def post_start_hook_stub(
     logger.info("post_start_hook_stub user_id=%s user_dir=%s", update.effective_user.id, user_dir)
 
 
-async def process_image_stub(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def process_image_stub(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    next_state: int = ASK_DATE,
+) -> int:
     """
     Обрабатывает изображение от пользователя:
     1. Сохраняет фото в директорию пользователя
@@ -117,8 +122,11 @@ async def process_image_stub(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         await message.reply_text(response)
         logger.info("Данные успешно извлечены и отправлены: user_id=%s", user_id)
-        await message.reply_text("Введите дату записи в формате YYYY.MM.DD:")
-        return ASK_DATE
+        if next_state == ASK_DATE:
+            await message.reply_text("Введите дату записи в формате YYYY.MM.DD:")
+        elif next_state == ASK_START:
+            await _ask_sleep_start(message)
+        return next_state
         
     except Exception as e:
         logger.error("Ошибка при обработке изображения: user_id=%s, error=%s", user_id, e, exc_info=True)
@@ -189,8 +197,25 @@ async def on_sleep_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         await update.effective_message.reply_text("Неверный формат даты. Используйте YYYY.MM.DD.")
         return ASK_DATE
     context.user_data["sleep_date"] = parsed
-    await _ask_sleep_start(update.effective_message)
-    return ASK_START
+    await update.effective_message.reply_text("Теперь отправьте скриншот с записями сна.")
+    return ASK_IMAGE
+
+
+async def on_sleep_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    return await process_image_stub(update, context, next_state=ASK_START)
+
+
+async def on_sleep_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    message = update.effective_message
+    document = getattr(message, "document", None)
+    if not document:
+        return ASK_IMAGE
+
+    if not _document_looks_like_image(document.mime_type, document.file_name):
+        await message.reply_text("Пожалуйста, отправь файл-изображение (png/jpg/webp/...).")
+        return ASK_IMAGE
+
+    return await process_image_stub(update, context, next_state=ASK_START)
 
 
 async def on_sleep_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -214,8 +239,15 @@ async def on_sleep_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         context.user_data.get("sleep_date"),
     )
     context.user_data["sleep_end"] = sleep_end
+    sleep_log = {
+        **sleep_log,
+        "date": context.user_data.get("sleep_date"),
+        "start": context.user_data.get("sleep_start"),
+        "end": sleep_end,
+    }
+    logger.info("sleep_record_stub user_id=%s data=%s", update.effective_user.id, sleep_log)
     await update.effective_message.reply_text(
-        "Спасибо! Записал данные:\n"
+        "✅ Запись успешно сохранена.\n"
         f"📅 Дата: {context.user_data.get('sleep_date')}\n"
         f"⏰ Время сна: {context.user_data.get('sleep_start')} - {sleep_end}"
     )
@@ -267,6 +299,14 @@ async def on_menu_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if action == MenuAction.ANALYSIS:
         await query.message.reply_text("Анализ: (заглушка)")
         return MAIN_MENU
+
+    if action == MenuAction.ADD_RECORD:
+        context.user_data.pop("sleep_log", None)
+        context.user_data.pop("sleep_date", None)
+        context.user_data.pop("sleep_start", None)
+        context.user_data.pop("sleep_end", None)
+        await query.message.reply_text("Введите дату записи в формате YYYY.MM.DD:")
+        return ASK_DATE
 
     if action == MenuAction.MAIN:
         await send_main_menu(update, context)

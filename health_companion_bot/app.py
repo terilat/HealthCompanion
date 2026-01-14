@@ -17,6 +17,7 @@ from datetime import datetime
 from .config import Settings, load_settings
 from .handlers import (
     ASK_DATE,
+    ASK_IMAGE,
     ASK_START,
     MAIN_MENU,
     cancel,
@@ -24,7 +25,9 @@ from .handlers import (
     on_menu_click,
     on_orphan_callback,
     on_photo,
+    on_sleep_document,
     on_sleep_date,
+    on_sleep_photo,
     on_sleep_start,
     on_text,
     on_unknown,
@@ -50,6 +53,11 @@ def build_application(settings: Settings | None = None) -> Application:
                 MessageHandler(filters.ALL & ~filters.COMMAND, on_unknown),
             ],
             ASK_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, on_sleep_date)],
+            ASK_IMAGE: [
+                MessageHandler(filters.PHOTO, on_sleep_photo),
+                MessageHandler(filters.Document.ALL, on_sleep_document),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, on_unknown),
+            ],
             ASK_START: [MessageHandler(filters.TEXT & ~filters.COMMAND, on_sleep_start)],
         },
         fallbacks=[
