@@ -28,11 +28,11 @@ jobs:
             echo "Missing TELEGRAM_BOT_TOKEN secret. Add it in GitHub: Settings -> Secrets and variables -> Actions."
             exit 1
           fi
-          if [ -z "${DATA_DIR_DOCKER}" ] || [ -z "${LOG_DIR_DOCKER}" ]; then
-            echo "Missing DATA_DIR_DOCKER or LOG_DIR_DOCKER variables. Add them in GitHub: Settings -> Secrets and variables -> Actions (Variables)."
+          if [ -z "${DATA_DIR}" ] || [ -z "${LOG_DIR}" ]; then
+            echo "Missing DATA_DIR or LOG_DIR variables. Add them in GitHub: Settings -> Secrets and variables -> Actions (Variables)."
             exit 1
           fi
-          printf 'TELEGRAM_BOT_TOKEN=%s\nDATA_DIR_DOCKER=%s\nLOG_DIR_DOCKER=%s\n' \
+          printf 'TELEGRAM_BOT_TOKEN=%s\nDATA_DIR=%s\nLOG_DIR=%s\n' \
             "${TELEGRAM_BOT_TOKEN}" "${DATA_DIR}" "${LOG_DIR}" > .env
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
