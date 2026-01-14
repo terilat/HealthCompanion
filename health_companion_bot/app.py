@@ -93,5 +93,5 @@ def main() -> None:
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("telegram.bot").setLevel(logging.WARNING)
     logging.getLogger("telegram.ext").setLevel(logging.WARNING)
-    logging.info("HealthCompanion Bot успешно запущен! Добро пожаловать 🚀")
+    logging.info("HealthCompanion успешно запущен! Добро пожаловать 🚀")
     build_application(settings).run_polling()
