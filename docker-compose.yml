@@ -7,8 +7,8 @@ services:
     working_dir: /app
     volumes:
       - .:/app
-      - ${DATA_DIR:-./data}:/app/data
-      - ${LOG_DIR:-./logs}:/app/logs
+      - ${DATA_DIR}:/app/data
+      - ${LOG_DIR}:/app/logs
     env_file:
       - .env
     command: python run_bot.py
