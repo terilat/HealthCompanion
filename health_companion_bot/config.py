@@ -17,12 +17,6 @@ class Settings(BaseSettings):
         description="Telegram bot token",
         validation_alias="TELEGRAM_BOT_TOKEN",
     )
-    data_dir: str = Field(
-        ...,
-        min_length=1,
-        description="Path to user data store",
-        validation_alias="DATA_DIR"
-    )
 
 def load_settings() -> Settings:
     try:
@@ -33,4 +27,3 @@ def load_settings() -> Settings:
             '  export TELEGRAM_BOT_TOKEN="123:ABC"\n'
             "Or copy `.env.example` and export it in your shell."
         ) from e
-

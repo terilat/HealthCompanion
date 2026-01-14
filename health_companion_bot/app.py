@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from telegram.ext import (
     Application,
@@ -11,7 +12,9 @@ from telegram.ext import (
     filters,
 )
 
-from .config import load_settings
+from datetime import datetime
+
+from .config import Settings, load_settings
 from .handlers import (
     ASK_DATE,
     ASK_START,
@@ -30,8 +33,9 @@ from .handlers import (
 )
 
 
-def build_application() -> Application:
-    settings = load_settings()
+def build_application(settings: Settings | None = None) -> Application:
+    if settings is None:
+        settings = load_settings()
 
     application = Application.builder().token(settings.bot_token).build()
 
@@ -61,14 +65,32 @@ def build_application() -> Application:
     return application
 
 
-def main() -> None:
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _configure_logging() -> None:
+    log_path = _project_root() / "logs"
+    log_path.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    log_file = log_path / f"health_companion_{timestamp}.log"
+    handlers: list[logging.Handler] = [
+        logging.StreamHandler(),
+        logging.FileHandler(log_file, encoding="utf-8"),
+    ]
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )    
+        handlers=handlers,
+    )
+
+
+def main() -> None:
+    settings = load_settings()
+    _configure_logging()
     # Игнорировать HTTP логи (показывать только WARNING и выше)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("telegram.bot").setLevel(logging.WARNING)
     logging.getLogger("telegram.ext").setLevel(logging.WARNING)
-    build_application().run_polling()
+    build_application(settings).run_polling()
