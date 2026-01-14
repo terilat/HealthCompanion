@@ -13,6 +13,8 @@ from .menu import MenuAction, build_main_menu_keyboard
 
 from .llm_processor import extract_health_data, SleepLog
 
+from health_companion_bot.config import load_settings
+
 logger = logging.getLogger(__name__)
 
 MAIN_MENU = 1
@@ -21,14 +23,14 @@ ASK_START = 3
 DATE_INPUT_FORMAT = "%Y.%m.%d"
 TIME_INPUT_FORMAT = "%H:%M"
 
+settings = load_settings()
 
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
 def _user_data_dir(user_id: int | str) -> Path:
-    return _project_root() / "data" / "users" / str(user_id)
-
+    return Path(settings.data_dir) / "data" / "users" / str(user_id)
 
 def _ensure_user_data_dir(user_id: int | str) -> Path:
     path = _user_data_dir(user_id)

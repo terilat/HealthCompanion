@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import instructor
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
@@ -110,24 +108,10 @@ class SleepLog(BaseModel):
             return TimeDelta(hours=hours, minutes=minutes)
         return None
 
-# Создаем клиент OpenAI, настроенный на Ollama API
-openai_client = AsyncOpenAI(
-    base_url=f"{OLLAMA_BASE_URL}/v1",
-    api_key="ollama",  # Ollama не требует реальный API ключ
-)
-
-# Патчим клиент через instructor для структурированного вывода
-client = instructor.patch(
-    openai_client,
-    mode=instructor.Mode.JSON,
-)
-
-
 def _encode_image(image_path: Path) -> str:
     with image_path.open("rb") as image_file:
         encoded = base64.b64encode(image_file.read()).decode("ascii")
     return encoded
-
 
 def _build_user_message(user_text: str, image_path: Path | None) -> dict[str, Any]:
     message: dict[str, Any] = {"role": "user", "content": user_text}
@@ -139,7 +123,7 @@ def _build_user_message(user_text: str, image_path: Path | None) -> dict[str, An
 async def _extract_with_ollama(
     user_text: str,
     response_model: type[BaseModel],
-    image_path: Path,
+    image_path: Path | None,
 ) -> BaseModel:
     payload = {
         "model": OLLAMA_MODEL,
@@ -267,26 +251,11 @@ async def extract_health_data(
     response_model: type[BaseModel],
     image_path: Path | None = None,
 ) -> BaseModel:
-    if image_path:
-        result = await _extract_with_ollama(user_text, response_model, image_path)
-        if _count_non_null_fields(result) < MIN_NON_NULL_FIELDS:
-            ocr_text = await _extract_text_with_ollama(image_path)
-            extracted = _parse_sleep_text(ocr_text)
-            if extracted:
-                merged = {**result.model_dump(), **extracted}
-                return response_model.model_validate(merged)
-        return result
-    result = await client.chat.completions.create(
-        model=OLLAMA_MODEL,
-        messages=[
-            {
-                "role": "system", 
-                "content": SYSTEM_PROMPT,
-            },
-            _build_user_message(user_text, image_path),
-        ],
-        response_model=response_model,
-        max_retries=3,
-        timeout=60.0,
-    )
+    result = await _extract_with_ollama(user_text, response_model, image_path)
+    if image_path and _count_non_null_fields(result) < MIN_NON_NULL_FIELDS:
+        ocr_text = await _extract_text_with_ollama(image_path)
+        extracted = _parse_sleep_text(ocr_text)
+        if extracted:
+            merged = {**result.model_dump(), **extracted}
+            return response_model.model_validate(merged)
     return result
