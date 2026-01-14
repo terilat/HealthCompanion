@@ -6,7 +6,6 @@ services:
     image: health-companion:latest
     working_dir: /app
     volumes:
-      - .:/app
       - ${DATA_DIR}:/app/data
       - ${LOG_DIR}:/app/logs
     env_file:
