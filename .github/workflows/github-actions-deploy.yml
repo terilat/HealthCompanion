@@ -42,6 +42,7 @@ jobs:
       - name: Build and run via Compose
         run: |
           set -euo pipefail
+          grep -E 'DATA_DIR|LOG_DIR' .env
           docker compose up -d --build --remove-orphans
 
       - name: Cleanup old containers/images
